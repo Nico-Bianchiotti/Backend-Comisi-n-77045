@@ -13,7 +13,8 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mongoose": "^8.9.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
