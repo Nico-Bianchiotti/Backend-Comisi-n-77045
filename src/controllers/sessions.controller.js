@@ -1,8 +1,8 @@
-import sessionService from "../services/session.service.js";
+import sessionsService from "../services/sessions.service.js";
 
 export const register = async (req, res, next) => {
   try {
-    const user = await sessionService.register(req.body);
+    const user = await sessionsService.register(req.body);
     res.status(201).json({ status: "success", payload: user });
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const result = await sessionService.login(req.body);
+    const result = await sessionsService.login(req.body);
     res.json({ status: "success", payload: result });
   } catch (error) {
     next(error);

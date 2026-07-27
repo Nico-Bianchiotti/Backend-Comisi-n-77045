@@ -1,8 +1,8 @@
-import eventService from "../services/event.service.js";
+import eventsService from "../services/events.service.js";
 
 export const getEvents = async (req, res, next) => {
   try {
-    const events = await eventService.getAll();
+    const events = await eventsService.getAll();
     res.json({ status: "success", payload: events });
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ export const getEvents = async (req, res, next) => {
 
 export const getEventById = async (req, res, next) => {
   try {
-    const event = await eventService.getById(req.params.id);
+    const event = await eventsService.getById(req.params.id);
     res.json({ status: "success", payload: event });
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ export const getEventById = async (req, res, next) => {
 
 export const createEvent = async (req, res, next) => {
   try {
-    const event = await eventService.create(req.body);
+    const event = await eventsService.create(req.body);
     res.status(201).json({ status: "success", payload: event });
   } catch (error) {
     next(error);
