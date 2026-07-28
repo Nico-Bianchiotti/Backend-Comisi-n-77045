@@ -1,5 +1,6 @@
 import usersRepository from "../repositories/users.repository.js";
-import { hashPassword } from "../utils/hash.js";
+import { hashPassword, comparePassword } from "../utils/hash.js";
+import { generateToken } from "../utils/jwt.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -65,8 +66,43 @@ export class SessionsService {
   }
 
   async login(data) {
-    // Estructura preparada para la próxima entrega (JWT, comparePassword, etc.)
-    return { message: "Ruta de sesiones lista, autenticación pendiente de implementar" };
+    const { email, password } = data;
+
+    // 1. Validar presencia de campos
+    if (!email || !password) {
+      const error = new Error("Credenciales inválidas");
+      error.status = 401;
+      throw error;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 2. Buscar usuario por email
+    const user = await usersRepository.findByEmail(normalizedEmail);
+
+    // 3. Mensaje genérico: nunca revelar si falló el email o la contraseña
+    if (!user) {
+      const error = new Error("Credenciales inválidas");
+      error.status = 401;
+      throw error;
+    }
+
+    // 4. Comparar contraseña con el hash guardado
+    const isValid = await comparePassword(password, user.password);
+    if (!isValid) {
+      const error = new Error("Credenciales inválidas");
+      error.status = 401;
+      throw error;
+    }
+
+    // 5. Generar JWT con payload mínimo (nunca la contraseña)
+    const token = generateToken({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    });
+
+    return { token };
   }
 }
 
