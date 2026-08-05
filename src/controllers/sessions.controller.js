@@ -1,12 +1,23 @@
-import sessionsService from "../services/sessions.service.js";
+import { generateToken } from "../utils/jwt.js";
 
 const COOKIE_NAME = "currentUser";
 const COOKIE_MAX_AGE = 3600000; // 1 hora, en ms
 
 export const register = async (req, res, next) => {
   try {
-    const user = await sessionsService.register(req.body);
-    res.status(201).json({ status: "success", payload: user });
+    // req.user lo dejó la estrategia "register" (ya validado y persistido)
+    const user = req.user;
+
+    res.status(201).json({
+      status: "success",
+      payload: {
+        id: user._id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -14,7 +25,15 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { token } = await sessionsService.login(req.body);
+    // req.user lo dejó la estrategia "login" (ya autenticado contra bcrypt)
+    const user = req.user;
+
+    // El JWT lo genera el controller, no la estrategia.
+    const token = generateToken({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    });
 
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
@@ -31,7 +50,7 @@ export const login = async (req, res, next) => {
 
 export const current = async (req, res, next) => {
   try {
-    // req.user lo setea el middleware "auth" a partir del JWT verificado
+    // req.user lo dejó la estrategia "current" (payload del JWT ya verificado)
     const { id, email, role } = req.user;
     res.json({ status: "success", payload: { id, email, role } });
   } catch (error) {
@@ -41,6 +60,7 @@ export const current = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   try {
+    // El logout no pasa por Passport, solo limpia la cookie.
     res.clearCookie(COOKIE_NAME);
     res.json({ status: "success", message: "Sesión cerrada" });
   } catch (error) {

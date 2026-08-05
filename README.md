@@ -6,7 +6,7 @@ API REST para gestionar eventos e inscripciones. Proyecto de Backend II — arqu
 
 ## Temática
 
-Plataforma de Eventos e Inscripciones: gestión de eventos, registro seguro de usuarios y autenticación con JWT vía cookie HttpOnly. En próximas entregas: Passport, roles y autorización por permisos, inscripciones y control de cupos.
+Plataforma de Eventos e Inscripciones: gestión de eventos, registro seguro de usuarios y autenticación con JWT vía cookie HttpOnly, centralizada con Passport.js. En próximas entregas: autorización por roles, protección de rutas sensibles, inscripciones y control de cupos.
 
 ## Tecnologías
 
@@ -15,6 +15,7 @@ Plataforma de Eventos e Inscripciones: gestión de eventos, registro seguro de u
 - Mongoose (MongoDB)
 - bcrypt
 - jsonwebtoken
+- passport, passport-local, passport-jwt
 - cookie-parser
 - dotenv
 
@@ -48,19 +49,19 @@ npm run dev
 
 ```
 src/
-├── app.js                        # configura Express
+├── app.js                        # configura Express + passport.initialize()
 ├── server.js                     # levanta el servidor y conecta la DB
 ├── config/
-│   └── db.js                     # conexión a MongoDB
+│   ├── db.js                     # conexión a MongoDB
+│   └── passport.config.js        # estrategias "register", "login" y "current"
 ├── routes/
 │   ├── events.router.js
-│   └── sessions.router.js
+│   └── sessions.router.js        # delega en passport.authenticate(...)
 ├── controllers/
 │   ├── events.controller.js
-│   └── sessions.controller.js
+│   └── sessions.controller.js    # arma la respuesta; el login genera el JWT y setea la cookie
 ├── services/
-│   ├── events.service.js
-│   └── sessions.service.js       # validación, normalización, hash
+│   └── events.service.js
 ├── repositories/
 │   ├── events.repository.js
 │   └── users.repository.js
@@ -72,10 +73,10 @@ src/
 │   └── User.js                    # first_name, last_name, email, password, role
 ├── middlewares/
 │   ├── error.middleware.js        # manejo global de errores y 404
-│   └── auth.middleware.js         # verifica el JWT de la cookie y setea req.user
+│   └── passport.middleware.js     # wrappers de passport.authenticate con status/mensaje propios
 └── utils/
     ├── hash.js                    # helper de bcrypt reutilizable
-    └── jwt.js                     # firma y verificación de JWT
+    └── jwt.js                     # firma del JWT (usada por el controller de login)
 ```
 
 ## Rutas disponibles
@@ -90,6 +91,24 @@ src/
 | POST | /api/sessions/login | Login: valida credenciales y setea cookie `currentUser` (JWT) |
 | GET | /api/sessions/current | Devuelve el usuario autenticado a partir de la cookie (protegida) |
 | POST | /api/sessions/logout | Elimina la cookie `currentUser` |
+
+## Autenticación centralizada con Passport.js
+
+A partir de esta entrega, la autenticación pasa por **estrategias de Passport** centralizadas en `src/config/passport.config.js`. El contrato externo de la API (rutas, requests, responses) **no cambió** respecto de la entrega anterior — lo que cambió es la organización interna.
+
+| Estrategia | Tipo | Qué hace |
+|---|---|---|
+| `register` | `passport-local` (con `passReqToCallback`) | Valida campos, normaliza el email, hashea la contraseña con bcrypt, chequea duplicados y crea el usuario |
+| `login` | `passport-local` | Busca el usuario por email y compara la contraseña con bcrypt. Nunca revela cuál de los dos falló |
+| `current` | `passport-jwt` | Extrae el JWT de la cookie `currentUser` (en vez del header `Authorization`) y verifica su firma/expiración contra `JWT_SECRET` |
+
+**División de responsabilidades:**
+- Las **estrategias** deciden si las credenciales son válidas (autenticación).
+- El **controller** decide qué hacer después: en `login`, es el controller (no la estrategia) el que genera el JWT con `generateToken()` y lo guarda en la cookie `currentUser` (`httpOnly: true`).
+- `src/middlewares/passport.middleware.js` envuelve `passport.authenticate(...)` para poder devolver el status y mensaje específico de cada caso (400, 409, 401) en vez del 401 genérico que da Passport por defecto.
+- `POST /api/sessions/logout` no pasa por Passport: solo limpia la cookie.
+
+**Preparado para más providers:** `passport.config.js` es el único lugar donde se registran estrategias (`passport.use(...)`). Para sumar login con Google o GitHub en el futuro, alcanza con agregar una nueva estrategia ahí mismo — no hace falta tocar `app.js` ni las rutas.
 
 ## Registro de usuarios — `POST /api/sessions/register`
 
@@ -292,4 +311,4 @@ Capturas de cada caso probado con Postman y MongoDB Atlas:
 
 ## Estado actual
 
-CRUD de eventos, registro seguro de usuarios y autenticación completa (login con JWT en cookie HttpOnly, `/current`, logout) funcionando de punta a punta. Passport, autorización por roles, inscripciones y control de cupos quedan para las próximas entregas.
+CRUD de eventos, registro seguro de usuarios y autenticación completa (login con JWT en cookie HttpOnly, `/current`, logout) funcionando de punta a punta, ahora centralizada mediante estrategias de Passport.js. Autorización por roles, protección de rutas sensibles, inscripciones y control de cupos quedan para las próximas entregas.
