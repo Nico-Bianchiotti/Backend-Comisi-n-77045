@@ -1,8 +1,8 @@
 import eventsDAO from "../dao/events.dao.js";
 
 export class EventsRepository {
-  async findAll() {
-    return eventsDAO.getAll();
+  async findAll(filter, options) {
+    return eventsDAO.getAll(filter, options);
   }
 
   async findById(id) {
@@ -15,10 +15,6 @@ export class EventsRepository {
 
   async update(id, data) {
     return eventsDAO.update(id, data);
-  }
-
-  async delete(id) {
-    return eventsDAO.delete(id);
   }
 }
 

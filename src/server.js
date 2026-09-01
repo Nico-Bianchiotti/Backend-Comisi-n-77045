@@ -1,3 +1,6 @@
+// "dotenv/config" carga el .env como efecto secundario apenas se importa.
+// Al ser el primer import del archivo, se evalúa antes que "./app.js",
+// así que cuando passport.config.js lee process.env.JWT_SECRET, ya está seteado.
 import "dotenv/config";
 
 import app from "./app.js";

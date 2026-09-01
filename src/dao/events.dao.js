@@ -1,8 +1,19 @@
 import EventModel from "../models/Event.js";
 
 export class EventsDAO {
-  async getAll() {
-    return EventModel.find();
+  /**
+   * @param {object} filter - filtro de Mongoose (status, category, location, rango de fechas)
+   * @param {{ skip: number, limit: number, sort: object }} options
+   */
+  async getAll(filter, options) {
+    const { skip, limit, sort } = options;
+
+    const [data, total] = await Promise.all([
+      EventModel.find(filter).sort(sort).skip(skip).limit(limit),
+      EventModel.countDocuments(filter),
+    ]);
+
+    return { data, total };
   }
 
   async getById(id) {
@@ -14,11 +25,7 @@ export class EventsDAO {
   }
 
   async update(id, data) {
-    return EventModel.findByIdAndUpdate(id, data, { new: true });
-  }
-
-  async delete(id) {
-    return EventModel.findByIdAndDelete(id);
+    return EventModel.findByIdAndUpdate(id, data, { new: true, runValidators: true });
   }
 }
 
