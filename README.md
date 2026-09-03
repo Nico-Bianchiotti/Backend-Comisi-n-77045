@@ -345,6 +345,23 @@ Reglas:
 
 `src/utils/mailer.js` centraliza la configuración de Nodemailer. Las credenciales **siempre** salen de variables de entorno (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM`), nunca están escritas en el código. El envío ocurre solo al confirmar una inscripción exitosa.
 
+## Usuarios de prueba
+
+Para probar los distintos roles sin tener que asignar permisos desde código (todavía no hay una ruta administrativa para cambiar roles), se registran usuarios normales por `POST /api/sessions/register` y después se edita a mano el campo `role` en MongoDB Atlas (o Compass), directo en el documento del usuario en la colección `users`.
+
+| Email | Password | Role |
+|---|---|---|
+| `user1@mail.com` | `Secreta123` | `user` |
+| `organizer1@mail.com` | `Secreta123` | `organizer` |
+| `organizer2@mail.com` | `Secreta123` | `organizer` |
+| `admin1@mail.com` | `Secreta123` | `admin` |
+
+Pasos para recrearlos en un entorno nuevo:
+
+1. Registrar cada uno con `POST /api/sessions/register` (van a quedar todos con `role: "user"` por defecto, ya que el registro público nunca acepta `role` desde el body).
+2. En MongoDB Atlas → Browse Collections → base `eventos` → colección `users`, editar manualmente el campo `role` de `organizer1`, `organizer2` y `admin1` a `"organizer"` / `"admin"` según corresponda. `user1` se deja como está.
+3. Loguearse con `POST /api/sessions/login` usando el email/password correspondiente para obtener la cookie de sesión con ese rol.
+
 ## Roles y autorización
 
 ### Roles disponibles
