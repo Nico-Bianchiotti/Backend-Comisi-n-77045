@@ -1,4 +1,5 @@
 import ticketsService from "../services/tickets.service.js";
+import { toTicketDTO, toTicketListDTO } from "../dtos/ticket.dto.js";
 
 export const createTicket = async (req, res, next) => {
   try {
@@ -7,7 +8,7 @@ export const createTicket = async (req, res, next) => {
     const { quantity } = req.body;
 
     const ticket = await ticketsService.createTicket(eid, req.user.id, req.user.email, quantity);
-    res.status(201).json({ status: "success", payload: ticket });
+    res.status(201).json({ status: "success", payload: toTicketDTO(ticket) });
   } catch (error) {
     next(error);
   }
@@ -16,7 +17,7 @@ export const createTicket = async (req, res, next) => {
 export const getMyTickets = async (req, res, next) => {
   try {
     const tickets = await ticketsService.getMyTickets(req.user.id);
-    res.json({ status: "success", payload: tickets });
+    res.json({ status: "success", payload: toTicketListDTO(tickets) });
   } catch (error) {
     next(error);
   }
@@ -25,7 +26,7 @@ export const getMyTickets = async (req, res, next) => {
 export const getEventTickets = async (req, res, next) => {
   try {
     const tickets = await ticketsService.getEventTickets(req.params.eid, req.user);
-    res.json({ status: "success", payload: tickets });
+    res.json({ status: "success", payload: toTicketListDTO(tickets) });
   } catch (error) {
     next(error);
   }
@@ -34,7 +35,7 @@ export const getEventTickets = async (req, res, next) => {
 export const cancelTicket = async (req, res, next) => {
   try {
     const ticket = await ticketsService.cancelTicket(req.params.tid, req.user);
-    res.json({ status: "success", payload: ticket });
+    res.json({ status: "success", payload: toTicketDTO(ticket) });
   } catch (error) {
     next(error);
   }

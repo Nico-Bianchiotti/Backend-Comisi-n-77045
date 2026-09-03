@@ -10,6 +10,7 @@ export class TicketsDAO {
   }
 
   async getById(id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return TicketModel.findById(id);
   }
 

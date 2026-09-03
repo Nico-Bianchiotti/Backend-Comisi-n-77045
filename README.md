@@ -2,7 +2,46 @@
 
 ## Descripción
 
-API REST para gestionar eventos e inscripciones. Proyecto de Backend II — arquitectura en capas (routes, controllers, services, repositories, dao, models, middlewares, utils).
+API REST para gestionar eventos e inscripciones. Proyecto de Backend II — arquitectura profesional en capas (routes, controllers, services, repositories, dao, dtos, models, middlewares, utils, constants).
+
+## Arquitectura en capas
+
+Cada capa tiene una única responsabilidad, y cada una solo puede hablar con la capa inmediatamente inferior — nunca "salta" capas.
+
+```
+Request
+  │
+  ▼
+Router          → define la ruta y qué middlewares aplican (auth, authorize)
+  │
+  ▼
+Controller      → extrae datos de req.body/params/query, llama al service,
+  │                 devuelve la respuesta pasada por un DTO. NUNCA calcula
+  │                 reglas de negocio ni importa modelos de Mongoose.
+  ▼
+Service         → concentra TODA la lógica de negocio: validaciones,
+  │                 permisos sobre recursos propios, cálculo de cupos,
+  │                 envío de email. Solo habla con repositories, nunca
+  │                 con DAOs ni con modelos directamente.
+  ▼
+Repository      → capa intermedia orientada al dominio (findByEmail,
+  │                 countActiveTickets, etc). Usa el DAO correspondiente;
+  │                 no importa modelos.
+  ▼
+DAO             → el ÚNICO lugar (junto con los propios archivos de
+  │                 modelos) que importa modelos de Mongoose y ejecuta
+  │                 queries directas (find, create, aggregate, etc).
+  ▼
+Model (Mongoose)
+```
+
+**DTO (Data Transfer Object):** vive aparte, en `src/dtos/`, y lo usa el controller justo antes de responder. Es la última barrera antes de que cualquier dato salga de la API: convierte un documento de Mongoose (que puede tener campos internos, `password` hasheada, metadata de Mongo, etc.) en un objeto plano con exactamente los campos que la respuesta debe tener — nunca más, nunca menos. Hay un DTO por entidad expuesta:
+
+- `dtos/user.dto.js` → `toUserDTO` (registro, listado admin) y `toCurrentUserDTO` (`/current`, que lee directo el payload del JWT). Ninguno de los dos incluye `password`.
+- `dtos/event.dto.js` → `toEventDTO` (evento completo) y `toEventSummaryDTO` (versión reducida, para cuando el evento viaja embebido dentro de un ticket vía `populate`).
+- `dtos/ticket.dto.js` → `toTicketDTO`, que detecta si el campo `event` viene populado y, si es así, lo pasa por `toEventSummaryDTO` — así ni el `populate` de Mongoose ni el DTO final terminan filtrando datos de más.
+
+**`src/constants/statuses.js`** existe para que los `services` puedan usar los valores válidos de `status` (`EVENT_STATUSES`, `TICKET_STATUSES`) sin tener que importar el archivo del modelo — los modelos a su vez importan esas mismas constantes, evitando duplicar los valores en dos lugares.
 
 ## Temática
 
@@ -81,9 +120,15 @@ src/
 │   ├── users.repository.js
 │   └── tickets.repository.js
 ├── dao/
-│   ├── events.dao.js
-│   ├── users.dao.js               # acceso directo a los modelos de Mongoose
-│   └── tickets.dao.js             # incluye la suma de cupos ocupados vía aggregate
+│   ├── events.dao.js               # único lugar (junto a models/) que importa mongoose directo
+│   ├── users.dao.js
+│   └── tickets.dao.js              # incluye la suma de cupos ocupados vía aggregate
+├── dtos/
+│   ├── user.dto.js                 # toUserDTO, toCurrentUserDTO — nunca exponen password
+│   ├── event.dto.js                # toEventDTO y toEventSummaryDTO (para populate)
+│   └── ticket.dto.js                # toTicketDTO — filtra el evento populado con su DTO resumido
+├── constants/
+│   └── statuses.js                 # EVENT_STATUSES, TICKET_STATUSES — evita que services importen models
 ├── models/
 │   ├── Event.js                   # title, description, category, date, location, capacity, price, status, organizer (ref User)
 │   ├── User.js                    # first_name, last_name, email, password, role
@@ -517,6 +562,25 @@ curl -b cookies.txt http://localhost:8080/api/sessions/current
 
 En Postman/Thunder Client alcanza con tener "cookies" habilitado en el cliente: después del login, la cookie viaja sola en las siguientes requests al mismo host.
 
+## Manejo de errores
+
+Todos los errores de negocio se lanzan como `new Error(mensaje)` con una propiedad `error.status` agregada, y se propagan con `next(error)` desde cualquier controller. Un único middleware centralizado (`middlewares/error.middleware.js`) los captura al final del pipeline de Express y responde siempre con el mismo formato:
+
+```json
+{ "status": "error", "message": "..." }
+```
+
+| Código | Cuándo se usa | Ejemplo en este proyecto |
+|---|---|---|
+| 400 | Datos inválidos o regla de negocio violada | `capacity` ≤ 0, fecha pasada, evento no publicado |
+| 401 | No autenticado (sin cookie, o token inválido/expirado) | `GET /current` sin sesión |
+| 403 | Autenticado, pero sin permisos para esa acción o ese recurso puntual | `user` creando un evento; `organizer` modificando un evento ajeno |
+| 404 | El recurso no existe (o el id tiene formato inválido — se trata igual) | Evento o ticket inexistente |
+| 409 | Conflicto con el estado actual de los datos | Email ya registrado; inscripción duplicada |
+| 500 | Error interno no anticipado | Solo cuando algo verdaderamente inesperado falla (ninguno de los casos de negocio debería llegar acá) |
+
+Ningún endpoint devuelve 500 para un error de negocio esperado — eso solo pasaría ante una falla real de infraestructura (por ejemplo, que la base de datos esté caída).
+
 ## Casos probados antes de la entrega
 
 - [x] Registro exitoso
@@ -553,6 +617,11 @@ En Postman/Thunder Client alcanza con tener "cookies" habilitado en el cliente: 
 - [x] Cancelación de ticket ajeno como `user` → 403
 - [x] `GET /api/events/:eid/tickets` como `user` común → 403
 - [x] `GET /api/events/:eid/tickets` como `organizer` de otro evento → 403
+- [x] Flujo completo: registro → login → crear evento → publicar → inscribirse → consultar mis tickets → cancelar (nada cambió de comportamiento tras el refactor)
+- [x] Respuesta de `/current` no incluye `password`
+- [x] Respuesta de ticket con `populate` no incluye `password` del usuario (solo trae `title`, `date`, `location` del evento embebido)
+- [x] Endpoint con error de negocio devuelve código HTTP correcto (no 500)
+- [x] Endpoint protegido sin sesión → 401; con sesión sin permisos → 403
 
 ## Evidencia de las pruebas
 
@@ -604,6 +673,22 @@ Capturas de cada caso probado con Postman y MongoDB Atlas:
 | `GET /events/:eid/tickets` como `user` → 403 | ![Tickets user 403](docs/52-tickets-user-403-ruta.png) |
 | `GET /events/:eid/tickets` como `organizer` ajeno → 403 | ![Tickets organizer ajeno](docs/53-tickets-organizer-ajeno-403.png) |
 
+### Pre-entrega 8 — flujo completo post-refactor (DAO/Repository/DTO)
+
+| Caso | Captura |
+|---|---|
+| `POST /api/sessions/register` → 201, `payload` sin `password` | ![Registro](docs/54-flujo-registro.png) |
+| `POST /api/events` → 201, evento creado en `draft` (organizer tomado del JWT) | ![Crear evento](docs/55-flujo-crear-evento.png) |
+| `PATCH /api/events/:id/status` → 200, evento pasa a `published` | ![Publicar evento](docs/56-flujo-publicar-evento.png) |
+| `POST /api/events/:eid/tickets` → 201, ticket `confirmed` con `reservationCode` | ![Inscripción](docs/57-flujo-inscripcion.png) |
+| `GET /api/tickets/my-tickets` → 200, ticket con `event` populado y resumido (sin datos de otros usuarios) | ![Mis tickets](docs/58-flujo-my-tickets.png) |
+| `PATCH /api/tickets/:tid/cancel` → 200, ticket `cancelled` con `cancelledAt` | ![Cancelar ticket](docs/59-flujo-cancelar-ticket.png) |
+| `GET /api/sessions/current` → 200, payload sin `password` | ![Current sin password](docs/60-flujo-current-sin-password.png) |
+| `POST /api/events/:eid/tickets` → 201, inscripción válida (previa al duplicado) | ![Ticket antes del duplicado](docs/61-flujo-ticket-duplicado-201-previo.png) |
+| `POST /api/events/:eid/tickets` repetido → 409, inscripción duplicada | ![Ticket duplicado 409](docs/62-flujo-ticket-duplicado-409.png) |
+| `POST /api/events` con rol `user` → 403, sin permisos | ![Events 403 rol user](docs/63-flujo-events-403-rol-user.png) |
+| `GET /api/tickets/my-tickets` sin cookie → 401, no autenticado | ![My-tickets 401 sin sesión](docs/64-flujo-my-tickets-401-sin-sesion.png) |
+
 ## Estado actual
 
-CRUD completo de eventos (crear, listar con filtros/paginación/orden, consultar, modificar, cambiar estado/cancelar) con reglas de negocio en la capa de servicios, registro seguro de usuarios y autenticación completa (login con JWT en cookie HttpOnly, `/current`, logout) centralizada mediante Passport.js, autorización por roles y validación de propiedad de recursos. Suma el flujo completo de inscripciones: tickets con control de cupos, validación de duplicados, cancelación (sin borrado físico) y notificación por email con Nodemailer al confirmarse una inscripción. Notificaciones adicionales y reportes quedan para las próximas entregas.
+CRUD completo de eventos (crear, listar con filtros/paginación/orden, consultar, modificar, cambiar estado/cancelar) con reglas de negocio en la capa de servicios, registro seguro de usuarios y autenticación completa (login con JWT en cookie HttpOnly, `/current`, logout) centralizada mediante Passport.js, autorización por roles y validación de propiedad de recursos. Flujo completo de inscripciones: tickets con control de cupos, validación de duplicados, cancelación (sin borrado físico) y notificación por email con Nodemailer al confirmarse una inscripción. La API quedó reorganizada en capas formales — DAO, Repository, Service, Controller y DTO — sin cambiar ningún comportamiento externo: todas las rutas responden exactamente igual que antes del refactor.

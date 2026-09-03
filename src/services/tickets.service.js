@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import crypto from "crypto";
 
 import ticketsRepository from "../repositories/tickets.repository.js";
@@ -109,15 +108,8 @@ export class TicketsService {
   }
 
   async cancelTicket(ticketId, user) {
-    // Igual que con los eventos: si el id no tiene formato válido de
-    // ObjectId, Mongoose tira un CastError antes de tocar la base.
-    // Lo atajamos acá para responder 404 en vez de 500.
-    if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-      const error = new Error("Ticket no encontrado");
-      error.status = 404;
-      throw error;
-    }
-
+    // El DAO ya devuelve null tanto si el formato de id es inválido como
+    // si el ticket no existe; para el service, ambos casos son "no encontrado".
     const ticket = await ticketsRepository.findById(ticketId);
 
     if (!ticket) {

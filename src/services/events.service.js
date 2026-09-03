@@ -1,6 +1,5 @@
-import mongoose from "mongoose";
 import eventsRepository from "../repositories/events.repository.js";
-import { EVENT_STATUSES } from "../models/Event.js";
+import { EVENT_STATUSES } from "../constants/statuses.js";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
@@ -62,15 +61,8 @@ export class EventsService {
   }
 
   async getById(id) {
-    // Si el id no tiene el formato válido de ObjectId, Mongoose tira un
-    // CastError antes de llegar a la base. Lo atajamos acá para responder
-    // 404 en vez de dejar que explote como 500.
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      const error = new Error("Evento no encontrado");
-      error.status = 404;
-      throw error;
-    }
-
+    // El DAO ya devuelve null tanto si el formato de id es inválido como
+    // si el evento no existe; para el service, ambos casos son "no encontrado".
     const event = await eventsRepository.findById(id);
     if (!event) {
       const error = new Error("Evento no encontrado");

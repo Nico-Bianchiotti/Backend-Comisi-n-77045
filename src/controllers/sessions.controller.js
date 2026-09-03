@@ -1,4 +1,5 @@
 import { generateToken } from "../utils/jwt.js";
+import { toUserDTO, toCurrentUserDTO } from "../dtos/user.dto.js";
 
 const COOKIE_NAME = "currentUser";
 const COOKIE_MAX_AGE = 3600000; // 1 hora, en ms
@@ -7,17 +8,7 @@ export const register = async (req, res, next) => {
   try {
     // req.user lo dejó la estrategia "register" (ya validado y persistido)
     const user = req.user;
-
-    res.status(201).json({
-      status: "success",
-      payload: {
-        id: user._id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    res.status(201).json({ status: "success", payload: toUserDTO(user) });
   } catch (error) {
     next(error);
   }
@@ -51,8 +42,7 @@ export const login = async (req, res, next) => {
 export const current = async (req, res, next) => {
   try {
     // req.user lo dejó la estrategia "current" (payload del JWT ya verificado)
-    const { id, email, role } = req.user;
-    res.json({ status: "success", payload: { id, email, role } });
+    res.json({ status: "success", payload: toCurrentUserDTO(req.user) });
   } catch (error) {
     next(error);
   }

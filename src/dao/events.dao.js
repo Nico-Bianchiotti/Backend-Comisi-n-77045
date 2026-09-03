@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import EventModel from "../models/Event.js";
 
 export class EventsDAO {
@@ -17,6 +18,9 @@ export class EventsDAO {
   }
 
   async getById(id) {
+    // Si el id no tiene formato válido de ObjectId, ni siquiera se consulta:
+    // se trata como "no encontrado" en vez de dejar que Mongoose tire un CastError.
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return EventModel.findById(id);
   }
 
